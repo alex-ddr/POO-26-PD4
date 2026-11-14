@@ -1,44 +1,22 @@
 package datos;
 
-import notificaciones.Observador;
-
-public class Editorial implements Observador {
+public class Editorial {
     private int id;
     private String nombre;
-    private Reserva reservaAsociada;
+    private String correoContacto;
 
-    public Editorial(int id, String nombre) {
+    public Editorial(int id, String nombre, String correoContacto) {
         this.id = id;
         this.nombre = nombre;
-        this.reservaAsociada = null;
+        this.correoContacto = correoContacto;
     }
 
-    @Override
-    public void actualizar(String mensaje) {
-        System.out.println("[NOTIFICACIÓN -> Editorial '" + nombre + "' (ID: " + id + ")]: " + mensaje);
-    }
-
-    public int getId() {
-        return id;
-    }
-
-    public String getNombre() {
-        return nombre;
-    }
-
-    public Reserva getReservaAsociada() {
-        return reservaAsociada;
-    }
-
-    public void setReservaAsociada(Reserva reservaAsociada) {
-        this.reservaAsociada = reservaAsociada;
-    }
+    public int getId() { return id; }
+    public String getNombre() { return nombre; }
+    public String getCorreoContacto() { return correoContacto; }
 
     @Override
     public String toString() {
-        String infoReserva = (reservaAsociada != null)
-                ? "Stand ID " + reservaAsociada.getStand().getId() + " (" + reservaAsociada.getStand().getEstado() + ")"
-                : "Sin reserva";
-        return "Editorial [ID=" + id + ", Nombre='" + nombre + "', Reserva=" + infoReserva + "]";
+        return String.format("Editorial ID: %d | Nombre: %s | Correo: %s", id, nombre, correoContacto);
     }
 }

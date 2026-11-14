@@ -1,157 +1,149 @@
-## Proyecto PD2 - Sistema Administrativo de Venta y Reserva de Stands (FILEY)
+# PD4 - Base de Datos en la Nube y Patron MVC (Sistema FILEY)
 
-Al parecer, los vídeos que intenté subir eran demasiado largos, pero me acabo de dar cuenta:
-![alt text](image.png)
+Link del video: 
 
-Así que aquí tiene un nuevo enlace a otro vídeo. Intenté que no superara los 5 minutos, pero fue complicado dada la cantidad de temas a tratar, sobre todo al hacerlo en inglés :
-https://youtu.be/XMMiQrw7Z1E
+## 1. Documentacion de lo implementado
 
-### 1. Descripción General
+En esta practica retomé el codigo de las entidades del sistema de la FILEY hecho en la PD2 (`Stand`, `Editorial`, `Reserva` y `EstadoStand`) para conectarlo a una base de datos relacional alojada en la nube (PostgreSQL en Neon.tech) usando **JDBC** y organizando la arquitectura con el patron **MVC + capa de Base de Datos**.
 
-Sistema backend desarrollado en Java bajo el paradigma de Programación Orientada a Objetos (POO) para administrar la venta, reserva, bloqueo administrativo, procesamiento de pagos y notificaciones de vencimiento de los stands de la Feria Internacional de la Lectura Yucatán (FILEY).
+Lo que se implementó por capas:
 
-### 2. Organización del Código (Paquetes)
+1. **Base de datos en la nube:**
+   - Creé las tres tablas relacionales (`stands`, `editoriales` y `reservaciones`) en la nube. La tabla `reservaciones` tiene llaves foraneas (`stand_id` y `editorial_id`) que apuntan a las tablas de stands y editoriales.
 
-El proyecto está estructurado en los tres paquetes solicitados:
+2. **Capa de Base de Datos (`bd`):**
+   - `ConexionBD`: maneja la conexion con la base de datos en la nube mediante `DriverManager.getConnection(...)` y tiene el metodo `probarConexion()` para verificar que el servidor responde bien.
+   - `FileyDAO`: implementa las lecturas con JDBC (`PreparedStatement` y `ResultSet`). Tiene los metodos `leerStands()`, `leerEditoriales()` y `leerReservaciones()`. Para las reservaciones utilicé un `INNER JOIN` en SQL para reconstruir los objetos `Reserva` completos con su `Stand` y su `Editorial`.
 
-```text
-src/
-├── datos/
-│   ├── EstadoStand.java
-│   ├── Stand.java
-│   ├── Editorial.java
-│   └── Reserva.java
-├── logica/
-│   ├── ConfiguracionFechas.java
-│   └── SistemaFILEY.java
-├── notificaciones/
-│   ├── Observador.java
-│   ├── Sujeto.java
-│   └── GestorNotificaciones.java
-└── MainFILEY.java
+3. **Patron MVC (`mvc` y `datos`):**
+   - **Modelo (`FileyModelo` y paquete `datos`):** guarda la representacion de las entidades y se comunica con `FileyDAO` para recuperar las listas de datos sin que la vista conozca el codigo SQL.
+   - **Vista (`FileyVista`):** se encarga unicamente de mostrar en consola el estado de la conexion y presentar de forma clara las listas de cada tabla.
+   - **Controlador (`FileyControlador`):** coordina el flujo. Pide al modelo verificar la conexion y obtener las listas de Stands, Editoriales y Reservaciones, y luego se las pasa a la vista para mostrarlas.
+
+## 2. Diagrama Entidad-Relacion (E-R)
+
+```mermaid
+erDiagram
+    STANDS ||--o{ RESERVACIONES : "es reservado en"
+    EDITORIALES ||--o{ RESERVACIONES : "realiza"
+
+    STANDS {
+        int id PK
+        varchar nombre
+        double metros_cuadrados
+        double precio_metro_cuadrado
+        varchar estado
+    }
+
+    EDITORIALES {
+        int id PK
+        varchar nombre
+        varchar correo_contacto
+    }
+
+    RESERVACIONES {
+        int id PK
+        int stand_id FK
+        int editorial_id FK
+        date fecha_reserva
+        double costo_total_acordado
+        double monto_pagado
+        boolean descuento_pronto_pago
+    }
 ```
 
-### 3. Requisitos Funcionales (RF)
-
-- **RF-01 (Gestión de Stands):** El sistema debe permitir registrar y consultar stands con identificador numérico, nombre/código, dimensiones en metros cuadrados ($m^2$), precio por $m^2$ y estado (`DISPONIBLE`, `RESERVADO`, `OCUPADO`, `BLOQUEADO`).
-- **RF-02 (Cálculo de Costos):** El sistema debe calcular automáticamente el costo base de un stand multiplicando sus metros cuadrados por el precio por metro cuadrado.
-- **RF-03 (Gestión de Estados del Stand):** El sistema debe controlar las transiciones de estado:
-  - De `DISPONIBLE` a `RESERVADO` al asignarse a una editorial.
-  - De `DISPONIBLE` a `BLOQUEADO` (y viceversa) por acción administrativa.
-  - De `BLOQUEADO` directamente a `RESERVADO` asignándolo a una editorial _(funcionalidad opcional)_.
-  - De `RESERVADO` a `OCUPADO` únicamente cuando el monto abonado sea igual o superior al **15 %** del costo total del stand.
-- **RF-04 (Gestión de Editoriales y Reservas):** El sistema debe registrar editoriales (ID, nombre) y asociarles su reserva correspondiente, llevando el control del saldo pagado y pendiente.
-- **RF-05 (Configuración de Fechas y Plazos):** El administrador debe poder modificar dinámicamente la fecha límite de reserva, la fecha de descuento por pronto pago, la fecha límite de pago total y el plazo máximo (en días) para pagar una reserva.
-- **RF-06 (Procesamiento de Pagos y Pronto Pago):** El sistema debe registrar abonos a una reserva, aplicando un descuento configurable si el pago se realiza antes o en la fecha de pronto pago, y actualizando el estado del stand a `OCUPADO` al alcanzar el 15 % mínimo.
-- **RF-07 (Sistema de Notificaciones - Patrón Observer):** El sistema debe comprobar los vencimientos próximos (plazo de reserva, pronto pago y pago total) y notificar automáticamente a las editoriales suscritas.
-
-### 4. Requisitos No Funcionales (RNF)
-
-- **RNF-01 (Arquitectura Modular):** El código fuente debe estructurarse estrictamente en tres paquetes independientes (`datos`, `logica` y `notificaciones`), respetando el principio de separación de responsabilidades.
-- **RNF-02 (Mantenibilidad y Extensibilidad):** La implementación de avisos debe emplear el patrón de diseño **Observer**, permitiendo agregar nuevos tipos de receptores de notificaciones sin modificar la lógica de negocio.
-- **RNF-03 (Integridad y Comparación de Objetos):** Las entidades principales (`Stand`) deben sobrescribir los métodos `equals()`, `hashCode()` y `toString()` para garantizar la unicidad y correcta manipulación en colecciones de Java.
-- **RNF-04 (Manejo Temporal):** El sistema debe utilizar la API moderna `java.time` (`LocalDate`, `ChronoUnit`) para el cálculo preciso de plazos y vencimientos.
-
-### 5. Diagrama de Clases UML
+## 3. Diagrama de Clases UML (MVC + Capa de BD)
 
 ```mermaid
 classDiagram
     direction TB
 
-    namespace notificaciones {
-        class Observador {
-            <<interface>>
-            +actualizar(String mensaje) void
-        }
-        class Sujeto {
-            <<interface>>
-            +suscribir(Observador o) void
-            +desuscribir(Observador o) void
-            +notificarObservadores(String mensaje) void
-        }
-        class GestorNotificaciones {
-            -List~Observador~ observadores
-            +suscribir(Observador o) void
-            +desuscribir(Observador o) void
-            +notificarObservadores(String mensaje) void
-            +notificarEditorialEspecifica(Observador o, String mensaje) void
-        }
+    class MainFILEY {
+        +main(String[] args) void
     }
 
-    namespace datos {
-        class EstadoStand {
-            <<enumeration>>
-            DISPONIBLE
-            RESERVADO
-            OCUPADO
-            BLOQUEADO
-        }
-        class Stand {
-            -int id
-            -String nombre
-            -double metrosCuadrados
-            -double precioPorMetroCuadrado
-            -EstadoStand estado
-            +calcularPrecioTotal() double
-            +equals(Object obj) boolean
-            +hashCode() int
-            +toString() String
-        }
-        class Editorial {
-            -int id
-            -String nombre
-            -Reserva reservaAsociada
-            +actualizar(String mensaje) void
-        }
-        class Reserva {
-            -Stand stand
-            -Editorial editorial
-            -LocalDate fechaCreacion
-            -double costoTotalAcordado
-            -double montoPagado
-            -boolean descuentoProntoPagoAplicado
-            +aplicarDescuentoProntoPago(double porcentaje) void
-            +abonarPago(double monto) void
-            +obtenerPorcentajePagado() double
-            +obtenerSaldoPendiente() double
-            +estaLiquidada() boolean
-        }
+    class FileyControlador {
+        -FileyModelo modelo
+        -FileyVista vista
+        +iniciarLecturaYPresentacion() void
     }
 
-    namespace logica {
-        class ConfiguracionFechas {
-            -LocalDate fechaLimiteReserva
-            -LocalDate fechaDescuentoProntoPago
-            -LocalDate fechaLimitePagoTotal
-            -int diasMaximosParaPagarReserva
-            -double porcentajeDescuentoProntoPago
-        }
-        class SistemaFILEY {
-            -Map~Integer, Stand~ catalogoStands
-            -Map~Integer, Editorial~ catalogoEditoriales
-            -List~Reserva~ listaReservas
-            -ConfiguracionFechas configuracionFechas
-            -GestorNotificaciones gestorNotificaciones
-            +registrarStand(Stand s) void
-            +registrarEditorial(Editorial e) void
-            +reservarStand(int idEditorial, int idStand, LocalDate fechaActual) boolean
-            +bloquearStand(int idStand) boolean
-            +liberarStandBloqueado(int idStand) boolean
-            +transferirStandBloqueadoAEditorial(int idStand, int idEditorial, LocalDate fechaActual) boolean
-            +registrarPago(int idEditorial, double monto, LocalDate fechaPago) boolean
-            +comprobarVencimientosYNotificar(LocalDate fechaActual, int diasAvisoPrevio) void
-        }
+    class FileyVista {
+        +mostrarEstadoConexion(boolean exito) void
+        +mostrarListaStands(List~Stand~ stands) void
+        +mostrarListaEditoriales(List~Editorial~ editoriales) void
+        +mostrarListaReservaciones(List~Reserva~ reservaciones) void
     }
 
-    Sujeto <|.. GestorNotificaciones
-    Observador <|.. Editorial
-    GestorNotificaciones o-- Observador
+    class FileyModelo {
+        -FileyDAO dao
+        +verificarConexionBD() boolean
+        +obtenerStands() List~Stand~
+        +obtenerEditoriales() List~Editorial~
+        +obtenerReservaciones() List~Reserva~
+    }
+
+    class FileyDAO {
+        +leerStands() List~Stand~
+        +leerEditoriales() List~Editorial~
+        +leerReservaciones() List~Reserva~
+    }
+
+    class ConexionBD {
+        -String URL
+        -String USER
+        -String PASSWORD
+        +obtenerConexion() Connection
+        +probarConexion() boolean
+    }
+
+    class Stand {
+        -int id
+        -String nombre
+        -double metrosCuadrados
+        -double precioPorMetroCuadrado
+        -EstadoStand estado
+        +calcularPrecioTotal() double
+    }
+
+    class Editorial {
+        -int id
+        -String nombre
+        -String correoContacto
+    }
+
+    class Reserva {
+        -int id
+        -Stand stand
+        -Editorial editorial
+        -LocalDate fechaReserva
+        -double costoTotalAcordado
+        -double montoPagado
+        -boolean descuentoProntoPagoAplicado
+    }
+
+    class EstadoStand {
+        <<enumeration>>
+        DISPONIBLE
+        RESERVADO
+        OCUPADO
+        BLOQUEADO
+    }
+
+    MainFILEY ..> FileyControlador
+    MainFILEY ..> FileyModelo
+    MainFILEY ..> FileyVista
+    MainFILEY ..> FileyDAO
+
+    FileyControlador --> FileyModelo
+    FileyControlador --> FileyVista
+    FileyModelo --> FileyDAO
+    FileyDAO ..> ConexionBD
+
+    FileyDAO ..> Stand
+    FileyDAO ..> Editorial
+    FileyDAO ..> Reserva
+    Reserva --> Stand
+    Reserva --> Editorial
     Stand --> EstadoStand
-    Editorial "1" <--> "0..1" Reserva
-    Reserva "0..1" --> "1" Stand
-    SistemaFILEY *-- ConfiguracionFechas
-    SistemaFILEY *-- GestorNotificaciones
-    SistemaFILEY o-- Stand
-    SistemaFILEY o-- Editorial
-    SistemaFILEY o-- Reserva
 ```

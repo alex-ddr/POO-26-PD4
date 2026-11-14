@@ -1,3 +1,5 @@
+.env
+
 # Fichiers Java compilés
 *.class
 out/
@@ -11,3 +13,4 @@ bin/
 # Fichiers système
 .DS_Store
 Thumbs.db
+
