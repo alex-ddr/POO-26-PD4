@@ -5,6 +5,8 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
+// Ya tenía la conexión en otra clase, pero aquí va un commit para validar los puntos de la sesión del 17/11
+
 public class FileyDAO {
 
     public List<Stand> leerStands() {

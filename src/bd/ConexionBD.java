@@ -6,6 +6,8 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Properties;
 
+// Ya tenía la conexión en otra clase, pero aquí va un commit para validar los puntos de la sesión del 17/11
+
 public class ConexionBD {
 
     public static Connection obtenerConexion() throws SQLException {
